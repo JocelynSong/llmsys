@@ -6,12 +6,13 @@ Embedding
 
 """
 import numpy as np
-
+import random
 from .module import Module, Parameter
 from .tensor_functions import (zeros, ones, rand, tensor, tensor_from_numpy, zeros_tensor_from_numpy, ones_tensor_from_numpy)
 from .nn import one_hot
 from .tensor_ops import TensorBackend
 from .tensor import Tensor
+from .operators import prod
 
 from typing import Any, Dict, Optional, Sequence, Tuple
 
@@ -27,14 +28,20 @@ class Embedding(Module):
             embedding_dim : The size of each embedding vector
 
         Attributes:
-            weight : The learnable weights of shape (num_embeddings, embedding_dim) initialized from N(0, 1).
+            weights : The learnable weights of shape (num_embeddings, embedding_dim) initialized from N(0, 1).
         """
         self.backend = backend
         self.num_embeddings = num_embeddings # Vocab size
-        self.embedding_dim  = embedding_dim  # Embedding Dimension
+        self.embedding_dim = embedding_dim  # Embedding Dimension
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        self.weights = Parameter(self.initialize(self.num_embeddings, self.embedding_dim))
         ### END YOUR SOLUTION
+
+    def initialize(self, *shape):
+        vals = [random.gauss(0, 1) for _ in range(int(prod(shape)))]
+        tensor = Tensor.make(vals, shape, backend=self.backend)
+        tensor.requires_grad_(True)
+        return tensor
     
     def forward(self, x: Tensor):
         """Maps word indices to one-hot vectors, and projects to embedding vectors.
@@ -47,7 +54,11 @@ class Embedding(Module):
         """
         bs, seq_len = x.shape
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        indexes = one_hot(x.view(bs*seq_len), self.num_embeddings)
+        indexes.backend = self.backend
+        embeddings = indexes.__matmul__(self.weights.value)
+        embeddings = embeddings.view(bs, seq_len, self.embedding_dim)
+        return embeddings
         ### END YOUR SOLUTION
 
     
@@ -60,6 +71,7 @@ class Dropout(Module):
             p_dropout : Probability an element will be zeroed.
         """
         self.p_dropout = p_dropout
+        self.training = True
 
     def forward(self, x: Tensor) -> Tensor: 
         """During training, randomly zero out elements of a tensor and scale by (1 - p_dropout)
@@ -71,7 +83,12 @@ class Dropout(Module):
             output : Tensor of shape (*)
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        if self.training:
+            ratio = np.random.binomial(1, 1.0 - self.p_dropout, x.shape)
+            ratio_tensor = tensor_from_numpy(ratio)
+            return x * ratio_tensor
+        else:
+            return x
         ### END YOUR SOLUTION
 
 
@@ -89,10 +106,23 @@ class Linear(Module):
             weight - The learnable weights of shape (in_size, out_size) initialized from Uniform(-1/sqrt(1/in_size), 1/sqrt(1/in_size)).
             bias   - The learnable weights of shape (out_size, ) initialized from Uniform(-1/sqrt(1/in_size), 1/sqrt(1/in_size)).
         """
+        self.in_size = in_size
         self.out_size = out_size
+        self.backend = backend
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        self.weights = Parameter(self.initialize(self.in_size, self.out_size))
+        # self.weights = Parameter(rand((self.in_size, self.out_size), self.backend, requires_grad=True))
+        self.bias_test = bias
+        if self.bias_test:
+            self.bias = Parameter(self.initialize(self.out_size))
+            # self.bias = Parameter(rand((self.out_size, ), self.backend, requires_grad=True))
         ### END YOUR SOLUTION
+
+    def initialize(self, *shape):
+        vals = [random.uniform(-1.0/np.sqrt(1/float(self.in_size)), 1.0/np.sqrt(1/float(self.in_size))) for _ in range(int(prod(shape)))]
+        tensor = Tensor.make(vals, shape, backend=self.backend)
+        tensor.requires_grad_(True)
+        return tensor
 
     def forward(self, x: Tensor):
         """Applies a linear transformation to the incoming data.
@@ -104,9 +134,13 @@ class Linear(Module):
             output : Tensor of shape (n, out_size)
         """
         batch, in_size = x.shape
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
-        ### END YOUR SOLUTION
+        weights = self.weights.value
+        # out = x.__matmul__(weights).view(batch, self.out_size)
+        out = (x @ weights).view(batch, self.out_size)
+
+        if self.bias_test:
+            out = out + self.bias.value.view(1, self.out_size)
+        return out
 
 
 class LayerNorm1d(Module):
@@ -125,7 +159,8 @@ class LayerNorm1d(Module):
         self.dim = dim
         self.eps = eps
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        self.weights = Parameter(ones_tensor_from_numpy((self.dim,), backend))
+        self.bias = Parameter(zeros_tensor_from_numpy((self.dim,), backend))
         ### END YOUR SOLUTION
 
     def forward(self, x: Tensor) -> Tensor:
@@ -141,5 +176,9 @@ class LayerNorm1d(Module):
         """
         batch, dim = x.shape
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+
+        weights = self.weights.value.view(1, self.dim)
+        bias = self.bias.value.view(1, self.dim)
+        out = ((x - x.mean(dim=1)) / ((x.var(dim=1)+self.eps).__pow__(0.5))) * weights + bias
+        return out
         ### END YOUR SOLUTION

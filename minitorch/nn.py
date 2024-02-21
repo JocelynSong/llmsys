@@ -209,7 +209,8 @@ def GELU(input: Tensor) -> Tensor:
     https://pytorch.org/docs/stable/generated/torch.nn.GELU.html
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError
+    b = np.sqrt(2 / np.pi)
+    return 0.5 * input * (1 + (b * (input + 0.044715 * input * input * input)).tanh())
     ### END YOUR SOLUTION
 
 
@@ -226,7 +227,7 @@ def logsumexp(input: Tensor, dim: int) -> Tensor:
             NOTE: minitorch functions/tensor functions typically keep dimensions if you provide a dimensions.
     """  
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError
+    return input.exp().sum(dim=dim).log()
     ### END YOUR SOLUTION
 
 
@@ -238,7 +239,10 @@ def one_hot(input: Tensor, num_classes: int) -> Tensor:
     Hint: You may want to use a combination of np.eye, tensor_from_numpy, 
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError
+    value = input.to_numpy().astype(np.int64)
+    labels = np.eye(num_classes)[value]
+    output = tensor_from_numpy(labels)
+    return output
     ### END YOUR SOLUTION
 
 
@@ -253,8 +257,10 @@ def softmax_loss(logits: Tensor, target: Tensor) -> Tensor:
     Returns: 
         loss : (minibatch, )
     """
-    result = None
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError
+    batch_size, num_class = logits.shape
+    logp = -logits + logsumexp(logits, dim=1).view(batch_size, 1)
+    labels = one_hot(target, num_class)
+    loss = (logp * labels).sum(dim=1)
     ### END YOUR SOLUTION
-    return result.view(batch_size, )
+    return loss.view(batch_size, )

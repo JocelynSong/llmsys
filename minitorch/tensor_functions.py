@@ -140,7 +140,8 @@ class PowerScalar(Function):
                 Tensor containing the result of raising every element of a to scalar.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        ctx.save_for_backward(a, scalar)
+        return a.f.pow_scalar_zip(a, scalar)
         ### END YOUR SOLUTION
 
     @staticmethod
@@ -163,13 +164,10 @@ class PowerScalar(Function):
                 gradient_for_a must be the correct gradient, but just return 0.0 for the gradient of scalar.
         """
         a, scalar = ctx.saved_values
-        grad_a    = None
-        
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
-        ### END YOUR SOLUTION
-
-        return (grad_a, 0.0)
+        return (
+            grad_output.f.mul_zip(scalar.f.mul_zip(scalar, a.f.pow_scalar_zip(a, scalar-1)), grad_output),
+            grad_output.f.mul_zip(a.f.pow_scalar_zip(a, scalar) * a.f.log_map(a), grad_output)
+        )
 
 class Tanh(Function):
     @staticmethod
@@ -189,9 +187,9 @@ class Tanh(Function):
             output : Tensor
                 Tensor containing the element-wise tanh of a.
         """
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
-        ### END YOUR SOLUTION
+        out = a.f.tanh_map(a)
+        ctx.save_for_backward(out)
+        return out
     
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tensor:
@@ -210,7 +208,10 @@ class Tanh(Function):
                 gradient_for_a must be the correct element-wise gradient for tanh.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError
+        (b,) = ctx.saved_values
+        shape = b.shape
+        ones = minitorch.ones(shape)
+        return grad_output.f.mul_zip(ones - b.f.mul_zip(b, b), grad_output)
         ### END YOUR SOLUTION
 
 class Sigmoid(Function):
